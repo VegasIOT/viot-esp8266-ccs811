@@ -491,6 +491,10 @@ void loop() {
           newCO2=CO2Value;
         }
       uint16_t newTVOC=ccs.getTVOC();
+      if (newTVOC > 10000)
+        {
+          newTVOC=TVOCValue;
+        }
       display.drawStringMaxWidth(1, 1, 128,"TVOC:"+String(ccs.getTVOC())+" CO2:"+String(newCO2));
       display.display();   
       int newdiff=abs(CO2Value-newCO2);
