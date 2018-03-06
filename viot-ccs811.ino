@@ -68,6 +68,11 @@ int OTAport = 8266;
 
 
 /**************************** SENSOR DEFINITIONS *******************************************/
+uint16_t newCO2;
+uint16_t newTVOC;
+int loops=0;
+const int number_of_loops=10;
+int TVOCarray[number_of_loops];
 int errors=0;
 int counter =0;
 float ldrValue;
@@ -378,14 +383,19 @@ void sendState() {
 
   char buffer[root.measureLength() + 1];
   root.printTo(buffer, sizeof(buffer));
+  Serial.println(buffer);
+  client.publish(light_state_topic, buffer, true);
   
-  if (CO2Value < 1) {
+  /*
+   if (CO2Value < 1) {
     Serial.println("less than 1");}
   else
   {
     Serial.println(buffer);
     client.publish(light_state_topic, buffer, true);
   }
+  
+   */
 }
 
 
@@ -438,7 +448,7 @@ void reconnect() {
       Serial.println("connected");
       client.subscribe(light_set_topic);
       setColor(0, 0, 0);
-      sendState();
+      //sendState();
     } else {
       Serial.print("failed, rc=");
       Serial.print(client.state());
@@ -471,11 +481,12 @@ void loop() {
 
   
     if(ccs.available()){
-    Serial.println("Calculating Temp");
+    //Serial.println("Calculating Temp");
     float temp = ccs.calculateTemperature();
     float fahrenheit;
+ 
     if(!ccs.readData()){
-      Serial.println("Reading Data");
+      //Serial.println("Reading Data");
       errors=0;
       Serial.print("CO2: ");
       Serial.print(ccs.geteCO2());
@@ -485,33 +496,64 @@ void loop() {
       fahrenheit = ((temp * 9)/5) + 32;
       Serial.println(fahrenheit);
       display.clear();
-      uint16_t newCO2=ccs.geteCO2();
+      
+      newCO2=ccs.geteCO2();
       if (newCO2 > 10000)
         {
           newCO2=CO2Value;
         }
-      uint16_t newTVOC=ccs.getTVOC();
+      newTVOC=ccs.getTVOC();
       if (newTVOC > 10000)
         {
           newTVOC=TVOCValue;
         }
       display.drawStringMaxWidth(1, 1, 128,"TVOC:"+String(ccs.getTVOC())+" CO2:"+String(newCO2));
       display.display();   
-      int newdiff=abs(CO2Value-newCO2);
-      int newdiffTVOC=abs(TVOCValue-newTVOC);
-    
+
+      
+      if (loops < number_of_loops-1)
+      {
+        TVOCarray[loops]=newTVOC;
+        loops++;
+      }
+      else
+      {
+        loops=0;
+        float TVOCavg = average(TVOCarray,number_of_loops);
+        newTVOC=(int)TVOCavg;
+        Serial.print("Average ");
+        Serial.println(newTVOC);
+      } 
+        
+
+
+      
+      /*
       if (newdiff > diffCO2) {
         //humValue=newdiff;
         CO2Value = newCO2;
         TVOCValue = newTVOC;
         sendState();
       }
+      */
       
-      if (newdiffTVOC > diffTVOC) {
+      int newdiff=abs(CO2Value-newCO2);
+      int newdiffTVOC=abs(TVOCValue-newTVOC);
+      
+      
+      if (newdiffTVOC > diffTVOC && loops==0) {
         CO2Value = newCO2;
         TVOCValue = newTVOC;
         sendState();
       }
+      
+      
+      if (counter==0 && loops==0) {
+        CO2Value = newCO2;
+        TVOCValue = newTVOC;
+        sendState();
+      }
+      
       
     }
       else{
@@ -531,8 +573,9 @@ void loop() {
         software_Reset();
       }
     }
-    
-  delay(1000);
+
+
+  delay(6000);
   
   
 
@@ -557,3 +600,10 @@ delay(1000);
 ESP.restart(); 
 }
 
+float average (int * array, int len)  // assuming array is int.
+{
+  long sum = 0L ;  // sum will be larger than an item, long for safety.
+  for (int i = 0 ; i < len ; i++)
+    sum += array [i] ;
+  return  ((float) sum) / len ;  // average will be fractional, so float may be appropriate.
+}
